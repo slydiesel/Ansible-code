@@ -1,0 +1,16 @@
+---
+- name: Patch EC2 Instances
+  hosts: linux_ec2_instances
+  gather_facts: False
+
+  tasks:
+    - name: Update SSM agent
+      become: true
+      yum:
+        name: amazon-ssm-agent
+        state: latest
+
+    - name: Run patching
+      become: true
+      command: "sudo /usr/bin/amazon-linux-extras install -y aws-nitro-enclave aws-nitro-enclaves-cli"
+      changed_when: false
