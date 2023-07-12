@@ -11,11 +11,11 @@
       changed_when: false
 
     - name: Check SSM agent version
-      raw: |
+      script: |
         $ssmAgentService = Get-ItemProperty 'HKLM:SYSTEM\\CurrentControlSet\\Services\\AmazonSSMAgent\\'
         if (-not $ssmAgentService -or $ssmAgentService.Version -lt '2.0.533.0') {
             Write-Host 'This command is not supported with SSM Agent version less than 2.0.533.0.'
-            exit -1
+            exit 1
         }
       changed_when: false
 
@@ -39,7 +39,7 @@
       changed_when: false
 
     - name: Check file hash for main DLL file
-      raw: |
+      script: |
         $filePath = "{{ psModuleInstallLocation }}/{{ psModuleFileName }}"
         $fileHash = "{{ psModuleHashes[psModuleFileName] }}"
         if (Test-Path($filePath)) {
@@ -49,16 +49,16 @@
             $sha256.Dispose()
             $fileStream.Dispose()
             if ($sourceHash -ne $fileHash) {
-                exit -1
+                exit 1
             }
         } else {
-            exit -1
+            exit 1
         }
       changed_when: false
       ignore_errors: true
 
     - name: Check file hash for other DLL files
-      raw: |
+      script: |
         $filePath = "{{ psModuleInstallLocation }}/{{ item }}"
         $fileHash = "{{ psModuleHashes[item] }}"
         if (Test-Path($filePath)) {
@@ -68,10 +68,10 @@
             $sha256.Dispose()
             $fileStream.Dispose()
             if ($sourceHash -ne $fileHash) {
-                exit -1
+                exit 1
             }
         } else {
-            exit -1
+            exit 1
         }
       loop:
         - 'AWSSDK.Core.dll'
