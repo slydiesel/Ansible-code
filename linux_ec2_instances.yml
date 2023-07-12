@@ -61,14 +61,3 @@
       with_fileglob: "./*.zip"
       register: unzip_result
       changed_when: unzip_result.rc == 0
-
-    - name: Run Ansible playbook
-      command: >
-        ansible-playbook -i "localhost," -c local
-        -e "{{ ExtraVariables | default({}) }}"
-        {% if Check | default(False) %}
-        --check
-        {% endif %}
-        "{{ PlaybookFile }}"
-      args:
-        chdir: "{{ playbook_dir }}"
