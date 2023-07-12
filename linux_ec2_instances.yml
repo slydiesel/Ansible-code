@@ -1,4 +1,3 @@
----
 - name: Patch EC2 Instances
   hosts: linux_ec2_instances
   gather_facts: False
@@ -12,5 +11,8 @@
 
     - name: Run patching
       become: true
-      command: "sudo /usr/bin/amazon-linux-extras install -y aws-nitro-enclave aws-nitro-enclaves-cli"
-      changed_when: false
+      yum:
+        name:
+          - aws-nitro-enclave
+          - aws-nitro-enclaves-cli
+        state: latest
