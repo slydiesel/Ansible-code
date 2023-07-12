@@ -1,6 +1,6 @@
 ---
 - name: Update and Patch EC2 Windows
-  hosts: windows_servers
+  hosts: windows_server
   gather_facts: False
   become: True
 
