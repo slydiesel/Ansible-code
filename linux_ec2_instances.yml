@@ -54,10 +54,8 @@
           when: "not ('Amazon Linux release 2' in linux_distribution.stdout or 'Amazon Linux AMI' in linux_distribution.stdout or 'Red Hat Enterprise Linux' in linux_distribution.stdout or 'Ubuntu' in linux_distribution.stdout)"
       when: InstallDependencies | default(True)
 
-    - name: Unzip files
-      command: unzip -o "*.zip"
-      args:
-        chdir: "{{ item }}"
-      with_fileglob: "./*.zip"
-      register: unzip_result
-      changed_when: unzip_result.rc == 0
+    - name: Echo installation issues
+      command: echo "Installation issues occurred" >> result.txt
+      changed_when: "'No package matching' in item.msg"
+      with_items: "{{ ansible_failed_task_results }}"
+      ignore_errors: true
