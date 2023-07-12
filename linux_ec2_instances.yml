@@ -1,18 +1,74 @@
-- name: Patch EC2 Instances
+- name: Run Ansible Playbook
   hosts: linux_ec2_instances
   gather_facts: False
+  become: true
 
   tasks:
-    - name: Update SSM agent
-      become: true
-      yum:
-        name: amazon-ssm-agent
-        state: latest
+    - name: Install and update required tools
+      block:
+        - name: Detect Linux distribution
+          shell: |
+            if [ -f "/etc/system-release" ]; then
+              cat /etc/system-release
+            elif [ -f "/etc/issue" ]; then
+              cat /etc/issue
+            fi
+          register: linux_distribution
 
-    - name: Run patching
-      become: true
-      yum:
-        name:
-          - aws-nitro-enclave
-          - aws-nitro-enclaves-cli
-        state: latest
+        - name: Install tools for Amazon Linux 2
+          yum:
+            name:
+              - https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+              - ansible
+              - unzip
+            state: present
+          when: "'Amazon Linux release 2' in linux_distribution.stdout"
+
+        - name: Install tools for Amazon Linux AMI
+          pip:
+            name: ansible
+            state: latest
+          when: "'Amazon Linux AMI' in linux_distribution.stdout"
+
+        - name: Install tools for Red Hat Enterprise Linux
+          yum:
+            name:
+              - python3-pip
+              - ansible
+              - unzip
+            state: present
+          when: "'Red Hat Enterprise Linux' in linux_distribution.stdout"
+
+        - name: Install tools for Ubuntu
+          apt:
+            name:
+              - python3-pip
+              - ansible
+              - unzip
+            state: present
+          when: "'Ubuntu' in linux_distribution.stdout"
+
+        - name: Display error message for unsupported distributions
+          fail:
+            msg: "There was a problem installing or updating the required tools for the document. You can review the log files to help you correct the problem."
+          when: "not ('Amazon Linux release 2' in linux_distribution.stdout or 'Amazon Linux AMI' in linux_distribution.stdout or 'Red Hat Enterprise Linux' in linux_distribution.stdout or 'Ubuntu' in linux_distribution.stdout)"
+      when: InstallDependencies | default(True)
+
+    - name: Unzip files
+      command: unzip -o "*.zip"
+      args:
+        chdir: "{{ item }}"
+      with_fileglob: "./*.zip"
+      register: unzip_result
+      changed_when: unzip_result.rc == 0
+
+    - name: Run Ansible playbook
+      command: >
+        ansible-playbook -i "localhost," -c local
+        -e "{{ ExtraVariables | default({}) }}"
+        {% if Check | default(False) %}
+        --check
+        {% endif %}
+        "{{ PlaybookFile }}"
+      args:
+        chdir: "{{ playbook_dir }}"
