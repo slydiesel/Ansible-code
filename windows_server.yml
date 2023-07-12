@@ -190,3 +190,4 @@
     - name: Remove downloaded file
       win_command: rm "{{ downloadPath }}"
       when: downloadPath is defined
+
