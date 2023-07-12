@@ -1,25 +1,17 @@
 - name: Run PatchBaselineOperations PowerShell script
-  hosts: windows-server
+  hosts: Windows-server
   gather_facts: False
   become: true
 
   tasks:
     - name: Check OS version
-      win_shell: |
-        if ([Environment]::OSVersion.Version.Major -le 5) {
-            Write-Error 'This command is not supported on Windows 2003 or lower.'
-            exit -1
-        } elseif ([Environment]::OSVersion.Version.Major -ge 10) {
-            $sku = (Get-CimInstance -ClassName Win32_OperatingSystem).OperatingSystemSKU
-            if ($sku -eq 143 -or $sku -eq 144) {
-                Write-Host 'This command is not supported on Windows 2016 Nano Server.'
-                exit -1
-            }
-        }
+      raw: |
+        $PSVersionTable.PSVersion.Major
+      register: os_version
       changed_when: false
 
     - name: Check SSM agent version
-      win_shell: |
+      raw: |
         $ssmAgentService = Get-ItemProperty 'HKLM:SYSTEM\\CurrentControlSet\\Services\\AmazonSSMAgent\\'
         if (-not $ssmAgentService -or $ssmAgentService.Version -lt '2.0.533.0') {
             Write-Host 'This command is not supported with SSM Agent version less than 2.0.533.0.'
@@ -35,21 +27,40 @@
         s3LocationUsEast: "https://s3.amazonaws.com/aws-ssm-us-east-1/{{ appName.lower() }}/{{ s3FileName }}"
         s3LocationRegular: "https://s3-us-east-1.amazonaws.com/aws-ssm-us-east-1/{{ appName.lower() }}/{{ s3FileName }}"
         s3LocationCn: "https://s3.cn-north-1.amazonaws.com.cn/aws-ssm-cn-north-1/{{ appName.lower() }}/{{ s3FileName }}"
-        s3FileHash: 9B823BEDBA52C94F0BA332E1C024FB7F5F7ED9B7343DDC3B10027380B1E28561
+        s3FileHash: "9B823BEDBA52C94F0BA332E1C024FB7F5F7ED9B7343DDC3B10027380B1E28561"
         psModuleHashes:
-          'Amazon.PatchBaselineOperations.dll': D68C082591D3615BB35F884900F5F7012B336121462C98D395A50D5430672F32
-          'AWSSDK.Core.dll': F024905CDFE4DE022DCD4D9BCF8EE9F237EE27D73DCC32CCB3A69DFC088EB2B0
-          'AWSSDK.S3.dll': B24C349EC0ADEB8462B6B24A27D65650873830416FFF8E816852966C21E87267
-          'AWSSDK.SimpleSystemsManagement.dll': 627CA33D6B2463C453EEC5F4767C5907D34EB6C1D49D106E5DC9413FADC9DAD9
-          'Newtonsoft.Json.dll': 0516D4109263C126C779E4E8F5879349663FA0A5B23D6D44167403E14066E6F9
-          'THIRD_PARTY_LICENSES.txt': 9C6EB75247F59B627FAF5F8E25633635DB30593B6C130C191CF3A302C1DC9FAE
-          'YamlDotNet.dll': D59E777A42A965327FCC18FC0AB7FA6729C0BCF845D239AC2811BD78F73A7F70
+          'Amazon.PatchBaselineOperations.dll': "D68C082591D3615BB35F884900F5F7012B336121462C98D395A50D5430672F32"
+          'AWSSDK.Core.dll': "F024905CDFE4DE022DCD4D9BCF8EE9F237EE27D73DCC32CCB3A69DFC088EB2B0"
+          'AWSSDK.S3.dll': "B24C349EC0ADEB8462B6B24A27D65650873830416FFF8E816852966C21E87267"
+          'AWSSDK.SimpleSystemsManagement.dll': "627CA33D6B2463C453EEC5F4767C5907D34EB6C1D49D106E5DC9413FADC9DAD9"
+          'Newtonsoft.Json.dll': "0516D4109263C126C779E4E8F5879349663FA0A5B23D6D44167403E14066E6F9"
+          'THIRD_PARTY_LICENSES.txt': "9C6EB75247F59B627FAF5F8E25633635DB30593B6C130C191CF3A302C1DC9FAE"
+          'YamlDotNet.dll': "D59E777A42A965327FCC18FC0AB7FA6729C0BCF845D239AC2811BD78F73A7F70"
       changed_when: false
 
-    - name: Check file hash
-      win_shell: |
-        $filePath = "{{ item.filePath }}"
-        $fileHash = "{{ item.fileHash }}"
+    - name: Check file hash for main DLL file
+      raw: |
+        $filePath = "{{ psModuleInstallLocation }}/{{ psModuleFileName }}"
+        $fileHash = "{{ psModuleHashes[psModuleFileName] }}"
+        if (Test-Path($filePath)) {
+            $fileStream = New-Object System.IO.FileStream($filePath, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read)
+            $sha256 = [System.Security.Cryptography.HashAlgorithm]::Create('System.Security.Cryptography.SHA256CryptoServiceProvider')
+            $sourceHash = [System.BitConverter]::ToString($sha256.ComputeHash($fileStream), 0).Replace('-', '').ToLowerInvariant()
+            $sha256.Dispose()
+            $fileStream.Dispose()
+            if ($sourceHash -ne $fileHash) {
+                exit -1
+            }
+        } else {
+            exit -1
+        }
+      changed_when: false
+      ignore_errors: true
+
+    - name: Check file hash for other DLL files
+      raw: |
+        $filePath = "{{ psModuleInstallLocation }}/{{ item }}"
+        $fileHash = "{{ psModuleHashes[item] }}"
         if (Test-Path($filePath)) {
             $fileStream = New-Object System.IO.FileStream($filePath, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read)
             $sha256 = [System.Security.Cryptography.HashAlgorithm]::Create('System.Security.Cryptography.SHA256CryptoServiceProvider')
@@ -63,66 +74,11 @@
             exit -1
         }
       loop:
-        - { filePath: "{{ psModuleInstallFile }}", fileHash: "{{ psModuleHashes[psModuleFileName] }}" }
-        - { filePath: "{{ psModuleInstallLocation }}\{{ item }}", fileHash: "{{ psModuleHashes[item] }}" }
+        - 'AWSSDK.Core.dll'
+        - 'AWSSDK.S3.dll'
+        - 'AWSSDK.SimpleSystemsManagement.dll'
+        - 'Newtonsoft.Json.dll'
+        - 'THIRD_PARTY_LICENSES.txt'
+        - 'YamlDotNet.dll'
       changed_when: false
-      ignore_errors: true
-
-    - name: Install PowerShell module
-      win_shell: |
-        if (-not (Test-Path $psModuleInstallLocation)) {
-            $noOp = New-Item $psModuleInstallLocation -ItemType Directory
-        }
-
-        if (-not (Test-Path $tempDirectory)) {
-            $noOp = New-Item $tempDirectory -ItemType Directory
-        }
-
-        $region = 'us-east-1'
-        if ($region -eq 'us-east-1') {
-            $s3Location = $s3LocationUsEast -f $region
-        } elseif (($region -eq 'cn-north-1') -or ($region -eq 'cn-northwest-1')) {
-            $s3Location = $s3LocationCn -f $region
-        } else {
-            $s3Location = $s3LocationRegular -f $region
-        }
-
-        (New-Object Net.WebClient).DownloadFile($s3Location, $downloadPath)
-
-        if (CheckFileHash $downloadPath $s3FileHash ) {
-            try {
-                (New-Object -Com Shell.Application).namespace($psModuleInstallLocation).CopyHere((New-Object -Com Shell.Application).namespace($downloadPath).Items(), 16)
-            } catch [Exception] {
-                exit -1
-            }
-        } else {
-            exit -1
-        }
-
-        if (-not (CheckPowerShellModuleInstallation $false)) {
-            exit -1
-        }
-      environment:
-        tempDirectory: C:\Temp
-        psModuleInstallLocation: C:\Program Files\Amazon\PatchBaselineOperations
-        downloadPath: C:\Temp\Amazon.PatchBaselineOperationsDeprecated-1.1.zip
-      changed_when: false
-      ignore_errors: true
-
-    - name: Setup command
-      win_command: |
-        Import-Module "{{ psModuleInstallFile }}"
-        $response = Invoke-PatchBaselineOperation -Operation "Operation" -SnapshotId "SnapshotId" -InstanceId $env:AWS_SSM_INSTANCE_ID -Region $env:AWS_SSM_REGION_NAME
-        if ($response.ExitCode -ne 3010) {
-            Write-Host $response.ToString()
-        }
-      environment:
-        psModuleInstallFile: C:\Program Files\Amazon\PatchBaselineOperations\Amazon.PatchBaselineOperations.dll
-      register: command_output
-      changed_when: false
-      ignore_errors: true
-
-    - name: Echo command output if failed
-      win_command: echo "{{ command_output.stdout }}"
-      changed_when: command_output.rc != 0
       ignore_errors: true
