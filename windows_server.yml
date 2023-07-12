@@ -1,5 +1,5 @@
 - name: Run PatchBaselineOperations PowerShell script
-  hosts: localhost
+  hosts: Windows-server
   gather_facts: False
   become: true
 
