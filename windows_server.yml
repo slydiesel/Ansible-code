@@ -1,11 +1,9 @@
----
 - name: Update and Patch EC2 Windows
   hosts: windows_server
   gather_facts: false
   tasks:
     - name: Check OS version
       win_shell: |
-        # Check the OS version
         if ([Environment]::OSVersion.Version.Major -le 5) {
             Write-Error 'This command is not supported on Windows 2003 or lower.'
             exit -1
@@ -21,7 +19,6 @@
 
     - name: Check SSM agent version
       win_shell: |
-        # Check the SSM agent version
         $ssmAgentService = Get-ItemProperty 'HKLM:SYSTEM\CurrentControlSet\Services\AmazonSSMAgent\'
         if (-not $ssmAgentService -or $ssmAgentService.Version -lt '2.0.533.0') {
             Write-Host 'This command is not supported with SSM Agent version less than 2.0.533.0.'
@@ -32,7 +29,6 @@
 
     - name: Install PowerShell module dependencies
       win_shell: |
-        # Application specific constants
         $appName = 'PatchBaselineOperations'
         $psModuleFileName = 'Amazon.PatchBaselineOperations.dll'
         $s3FileName = 'Amazon.PatchBaselineOperationsDeprecated-1.1.zip'
@@ -194,20 +190,18 @@
             $msg = "An error occurred when executing {0}: {1}`r`n" -f $appName, $_.Exception.Message
             Write-Error $msg
             exit -1
+        } finally {
+            if (Test-Path $downloadPath) {
+                Remove-Item $downloadPath
+            }
         }
-      finally:
-        - name: Cleanup downloaded zip file
-          win_command: rm "{{ downloadPath }}"
-        when: downloadPath is defined
 
-    - name: Setup the command
+    - name: Run PatchBaselineOperation
       win_shell: |
-        Import-Module "{{ psModuleInstallFile }}"
-        $response = Invoke-PatchBaselineOperation -Operation "{{ Operation }}" -SnapshotId "{{ SnapshotId }}" -InstanceId $env:AWS_SSM_INSTANCE_ID -Region $env:AWS_SSM_REGION_NAME
+        Import-Module $psModuleInstallFile
+        $response = Invoke-PatchBaselineOperation -Operation {{ Operation }} -SnapshotId '{{ SnapshotId }}' -InstanceId $env:AWS_SSM_INSTANCE_ID -Region $env:AWS_SSM_REGION_NAME
 
         if ($response.ExitCode -ne 3010) {
             $response.ToString()
         }
-
-      failed_when: false
-
+      when: os_check.rc == 0 and ssm_check.rc == 0
