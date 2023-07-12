@@ -1,5 +1,5 @@
 - name: Run PatchBaselineOperations PowerShell script
-  hosts: Windows-server
+  hosts: windows-server
   gather_facts: False
   become: true
 
@@ -32,9 +32,9 @@
         appName: PatchBaselineOperations
         psModuleFileName: Amazon.PatchBaselineOperations.dll
         s3FileName: Amazon.PatchBaselineOperationsDeprecated-1.1.zip
-        s3LocationUsEast: https://s3.amazonaws.com/aws-ssm-us-east-1/{{ appName.lower() }}/{{ s3FileName }}
-        s3LocationRegular: https://s3-us-east-1.amazonaws.com/aws-ssm-us-east-1/{{ appName.lower() }}/{{ s3FileName }}
-        s3LocationCn: https://s3.cn-north-1.amazonaws.com.cn/aws-ssm-cn-north-1/{{ appName.lower() }}/{{ s3FileName }}
+        s3LocationUsEast: "https://s3.amazonaws.com/aws-ssm-us-east-1/{{ appName.lower() }}/{{ s3FileName }}"
+        s3LocationRegular: "https://s3-us-east-1.amazonaws.com/aws-ssm-us-east-1/{{ appName.lower() }}/{{ s3FileName }}"
+        s3LocationCn: "https://s3.cn-north-1.amazonaws.com.cn/aws-ssm-cn-north-1/{{ appName.lower() }}/{{ s3FileName }}"
         s3FileHash: 9B823BEDBA52C94F0BA332E1C024FB7F5F7ED9B7343DDC3B10027380B1E28561
         psModuleHashes:
           'Amazon.PatchBaselineOperations.dll': D68C082591D3615BB35F884900F5F7012B336121462C98D395A50D5430672F32
@@ -63,10 +63,8 @@
             exit -1
         }
       loop:
-        - filePath: "{{ psModuleInstallFile }}"
-          fileHash: "{{ psModuleHashes[psModuleFileName] }}"
-        - filePath: "{{ psModuleInstallLocation }}\{{ item }}"
-          fileHash: "{{ psModuleHashes[item] }}"
+        - { filePath: "{{ psModuleInstallFile }}", fileHash: "{{ psModuleHashes[psModuleFileName] }}" }
+        - { filePath: "{{ psModuleInstallLocation }}\{{ item }}", fileHash: "{{ psModuleHashes[item] }}" }
       changed_when: false
       ignore_errors: true
 
@@ -104,26 +102,11 @@
         if (-not (CheckPowerShellModuleInstallation $false)) {
             exit -1
         }
-      changed_when: false
       environment:
         tempDirectory: C:\Temp
         psModuleInstallLocation: C:\Program Files\Amazon\PatchBaselineOperations
         downloadPath: C:\Temp\Amazon.PatchBaselineOperationsDeprecated-1.1.zip
-        appName: PatchBaselineOperations
-        s3FileName: Amazon.PatchBaselineOperationsDeprecated-1.1.zip
-        psModuleFileName: Amazon.PatchBaselineOperations.dll
-        s3LocationUsEast: https://s3.amazonaws.com/aws-ssm-us-east-1/{{ appName.lower() }}/{{ s3FileName }}
-        s3LocationRegular: https://s3-us-east-1.amazonaws.com/aws-ssm-us-east-1/{{ appName.lower() }}/{{ s3FileName }}
-        s3LocationCn: https://s3.cn-north-1.amazonaws.com.cn/aws-ssm-cn-north-1/{{ appName.lower() }}/{{ s3FileName }}
-        s3FileHash: 9B823BEDBA52C94F0BA332E1C024FB7F5F7ED9B7343DDC3B10027380B1E28561
-        psModuleHashes:
-          'Amazon.PatchBaselineOperations.dll': D68C082591D3615BB35F884900F5F7012B336121462C98D395A50D5430672F32
-          'AWSSDK.Core.dll': F024905CDFE4DE022DCD4D9BCF8EE9F237EE27D73DCC32CCB3A69DFC088EB2B0
-          'AWSSDK.S3.dll': B24C349EC0ADEB8462B6B24A27D65650873830416FFF8E816852966C21E87267
-          'AWSSDK.SimpleSystemsManagement.dll': 627CA33D6B2463C453EEC5F4767C5907D34EB6C1D49D106E5DC9413FADC9DAD9
-          'Newtonsoft.Json.dll': 0516D4109263C126C779E4E8F5879349663FA0A5B23D6D44167403E14066E6F9
-          'THIRD_PARTY_LICENSES.txt': 9C6EB75247F59B627FAF5F8E25633635DB30593B6C130C191CF3A302C1DC9FAE
-          'YamlDotNet.dll': D59E777A42A965327FCC18FC0AB7FA6729C0BCF845D239AC2811BD78F73A7F70
+      changed_when: false
       ignore_errors: true
 
     - name: Setup command
