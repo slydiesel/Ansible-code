@@ -1,6 +1,6 @@
 ---
 - name: Update and Patch EC2 Windows
-  hosts: Windows_server
+  hosts: Windows-server
   gather_facts: false
   tasks:
     - name: Check OS version
