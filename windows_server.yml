@@ -18,6 +18,7 @@
       register: os_check
       failed_when: false
 
+
     - name: Install PowerShell module dependencies
       win_shell: |
         $appName = 'PatchBaselineOperations'
@@ -41,7 +42,136 @@
         $psModuleInstallLocation = [IO.Path]::Combine([Environment]::GetEnvironmentVariable([Environment+SpecialFolder]::ProgramFiles), 'Amazon', $appName)
         $psModuleInstallFile = [IO.Path]::Combine($psModuleInstallLocation, $psModuleFileName)
 
-        # ... (rest of the script remains the same)
+        function CheckFileHash ($filePath, $fileHash) {
+            if (Test-Path $filePath) {
+                $fileStream = New-Object System.IO.FileStream($filePath, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read)
+                $sha256 = [System.Security.Cryptography.HashAlgorithm]::Create('System.Security.Cryptography.SHA256CryptoServiceProvider')
+                $sourceHash = [System.BitConverter]::ToString($sha256.ComputeHash($fileStream), 0).Replace('-', '').ToLowerInvariant()
+                $sha256.Dispose()
+                $fileStream.Dispose()
+
+                if ($sourceHash -ne $fileHash) {
+                    return $false
+                }
+                else {
+                    return $true
+                }
+            }
+            else {
+                return $false
+            }
+        }
+
+        function CheckPowerShellModuleInstallation ([bool]$suppressError) {
+            $isInstalled = $false
+            if (Test-Path $psModuleInstallLocation) {
+                if (((Get-ChildItem $psModuleInstallLocation -Directory | Measure-Object).Count -eq 0) -and
+                    ((Get-ChildItem $psModuleInstallLocation -File | Measure-Object).Count -eq $psModuleHashes.Count)) {
+                    $validFileHashes = $true
+
+                    Get-ChildItem $psModuleInstallLocation -File | ForEach-Object {
+                        if ($psModuleHashes.ContainsKey($_.Name)) {
+                            $installFile = [IO.Path]::Combine($psModuleInstallLocation, $_.Name)
+                            if (-Not (CheckFileHash $installFile $psModuleHashes[$_.Name])) {
+                                if (-Not $suppressError) {
+                                    Write-Error "The SHA hash of the $($_.Name) file does not match the expected value."
+                                }
+                                $validFileHashes = $false
+                            }
+                        } else {
+                            if (-Not $suppressError) {
+                                Write-Error "The PowerShellModule installation folder contains an unexpected file with name $($_.Name)."
+                            }
+                            $validFileHashes = $false
+                        }
+                    }
+                    $isInstalled = $validFileHashes
+                } else {
+                    if (-Not $suppressError) {
+                        Write-Error "An incorrect number of files were present in the PowerShellModule installation folder. The contents will be deleted."
+                    }
+                }
+                if (-Not $isInstalled) {
+                    Remove-Item $psModuleInstallLocation -Recurse
+                }
+            }
+            return $isInstalled
+        }
+
+        function ExtractZipCoreOs ([string]$zipFilePath, [string]$destPath) {
+            try {
+                [System.Reflection.Assembly]::LoadWithPartialName('System.IO.Compression.FileSystem') | Out-Null
+                $zip = [System.IO.Compression.ZipFile]::OpenRead($zipFilePath)
+                foreach ($item in $zip.Entries) {
+                    $extractedPath = Join-Path $destPath $item.FullName
+
+                    if ($item.Length -eq 0) {
+                        if (!(Test-Path $extractedPath)) {
+                            mkdir $extractedPath | Out-Null
+                        }
+                    } else {
+                        $fileParent = Split-Path $extractedPath
+
+                        if (!(Test-Path $fileParent)) {
+                            mkdir $fileParent | Out-Null
+                        }
+
+                        [System.IO.Compression.ZipFileExtensions]::ExtractToFile($item, $extractedPath, $true)
+                    }
+                }
+            } catch {
+                throw "Error encountered when extracting patch management zip file.`n$($_.Exception.Message)"
+            } finally {
+                $zip.Dispose()
+            }
+        }
+
+        function InstallPowerShellModule {
+            if (-Not (CheckPowerShellModuleInstallation $true)) {
+                Write-Output ("Preparing to download {0} PowerShell module from S3.`r`n" -f $appName)
+
+                # Setup the directories if they do not exist.
+                if (-Not (Test-Path $psModuleInstallLocation)) {
+                    $noOp = New-Item $psModuleInstallLocation -ItemType Directory
+                }
+
+                if (-Not (Test-Path $tempDirectory)) {
+                    $noOp = New-Item $tempDirectory -ItemType Directory
+                }
+                $region = $env:AWS_SSM_REGION_NAME
+                if ($region -eq 'us-east-1') {
+                    $s3Location = $s3LocationUsEast -f $region
+                } elseif (($region -eq 'cn-north-1') -or ($region -eq 'cn-northwest-1')) {
+                    $s3Location = $s3LocationCn -f $region
+                } else {
+                    $s3Location = $s3LocationRegular -f $region
+                }
+
+                Write-Output ("Downloading {0} PowerShell module from {1} to {2}.`r`n" -f $appName, $s3Location, $downloadPath)
+                # Add Tls 1.2 support
+                [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+
+                (New-Object Net.WebClient).DownloadFile($s3Location, $downloadPath)
+
+                if (CheckFileHash $downloadPath $s3FileHash) {
+                    Write-Output ("Extracting {0} zip file contents to temporary folder.`r`n" -f $appName)
+                    try {
+                        (New-Object -ComObject Shell.Application).namespace($psModuleInstallLocation).CopyHere((New-Object -ComObject Shell.Application).namespace($downloadPath).Items(), 16)
+                    } catch [Exception] {
+                        ExtractZipCoreOs $downloadPath $psModuleInstallLocation
+                    }
+                } else {
+                    throw ("The SHA hash of the {0} S3 source file does not match the expected value." -f $appName)
+                }
+
+                Write-Output ("Verifying SHA 256 of the {0} PowerShell module files.`r`n" -f $appName)
+                if (-Not (CheckPowerShellModuleInstallation $false)) {
+                    throw ("The verification of the {0} PowerShell module did not pass." -f $appName)
+                }
+
+                Write-Output ("Successfully downloaded and installed the {0} PowerShell module.`r`n" -f $appName)
+            }
+        }
 
     - name: Install PowerShell module
       win_shell: |
@@ -49,5 +179,4 @@
       when: os_check.rc == 0 and ssm_check.rc == 0
 
     - name: Remove downloaded file
-      win_command: rm "{{ downloadPath }}"
-      when: downloadPath is defined
+      win_command: rm "{{ downloadPath }
