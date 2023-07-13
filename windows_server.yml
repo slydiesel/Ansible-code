@@ -18,15 +18,6 @@
       register: os_check
       failed_when: false
 
-    - name: Check SSM agent version
-      win_shell: |
-        $ssmAgentService = Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Services\AmazonSSMAgent\'
-        if (-not $ssmAgentService -or $ssmAgentService.Version -lt '2.0.533.0') {
-            Write-Host 'This command is not supported with SSM Agent version less than 2.0.533.0.'
-            exit -1
-        }
-      register: ssm_check
-      failed_when: false
 
     - name: Install PowerShell module dependencies
       win_shell: |
