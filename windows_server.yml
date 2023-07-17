@@ -4,36 +4,31 @@
   gather_facts: false
   tasks:
     - name: Check OS version and SSM agent version
-      win_shell: |
-        $scriptBlock = @'
-        if ($PSVersionTable.PSEdition -eq 'Desktop') {
-            Write-Error 'This command is not supported on Windows Desktop editions.'
-            exit 1
-        }
-        if (([Environment]::OSVersion.Version.Major -le 5) -or ([Environment]::OSVersion.Version.Major -ge 10 -and (Get-CimInstance -ClassName Win32_OperatingSystem).OperatingSystemSKU -in 143, 144)) {
-            Write-Error 'This command is not supported on this Windows version.'
-            exit 1
-        }
-        $ssmAgentService = Get-ItemProperty 'HKLM:SYSTEM\\CurrentControlSet\\Services\\AmazonSSMAgent\\'
-        if (-not $ssmAgentService -or $ssmAgentService.Version -lt '2.0.533.0') {
-            Write-Host 'This command is not supported with SSM Agent version less than 2.0.533.0.'
-            exit 1
-        }
-        '@
-        scriptBlock | Out-File -FilePath '/tmp/check_os_version.ps1'
+      blockinfile:
+        path: /tmp/check_os_version.ps1
+        block: |
+          if ($PSVersionTable.PSEdition -eq 'Desktop') {
+              Write-Error 'This command is not supported on Windows Desktop editions.'
+              exit 1
+          }
+          if (([Environment]::OSVersion.Version.Major -le 5) -or ([Environment]::OSVersion.Version.Major -ge 10 -and (Get-CimInstance -ClassName Win32_OperatingSystem).OperatingSystemSKU -in 143, 144)) {
+              Write-Error 'This command is not supported on this Windows version.'
+              exit 1
+          }
+          $ssmAgentService = Get-ItemProperty 'HKLM:SYSTEM\\CurrentControlSet\\Services\\AmazonSSMAgent\\'
+          if (-not $ssmAgentService -or $ssmAgentService.Version -lt '2.0.533.0') {
+              Write-Host 'This command is not supported with SSM Agent version less than 2.0.533.0.'
+              exit 1
+          }
       register: os_check
       changed_when: false
 
     - name: Install PatchBaselineOperations PowerShell module
-      win_shell: Install-Module -Name PatchBaselineOperations -Force -ErrorAction Stop
+      win_command: Install-Module -Name PatchBaselineOperations -Force -ErrorAction Stop
       when: os_check.rc == 0
 
     - name: Patch Windows servers
-      win_shell: |
-        $response = Invoke-PatchBaselineOperation -Operation {{ operation }} -SnapshotId {{ snapshot_id }} -InstanceId $env:AWS_SSM_INSTANCE_ID -Region $env:AWS_SSM_REGION_NAME
-        if ($response.ExitCode -ne 3010) {
-            Write-Host $response.ToString()
-        }
+      win_command: Invoke-PatchBaselineOperation -Operation {{ operation }} -SnapshotId {{ snapshot_id }} -InstanceId $env:AWS_SSM_INSTANCE_ID -Region $env:AWS_SSM_REGION_NAME
       when: os_check.rc == 0 and module_install_result.rc == 0
       register: patch_result
       changed_when: false
