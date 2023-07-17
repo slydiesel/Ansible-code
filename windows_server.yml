@@ -17,6 +17,7 @@
         }
       register: os_check
       failed_when: false
+
     - name: Install PowerShell module dependencies
       win_shell: |
         $appName = 'PatchBaselineOperations'
@@ -62,7 +63,9 @@
             if (Test-Path $psModuleInstallLocation) {
                 if (((Get-ChildItem $psModuleInstallLocation -Directory | Measure-Object).Count -eq 0) -and
                     ((Get-ChildItem $psModuleInstallLocation -File | Measure-Object).Count -eq $psModuleHashes.Count)) {
-                    $validFileHashes = $true
+                   
+
+ $validFileHashes = $true
                     Get-ChildItem $psModuleInstallLocation -File | ForEach-Object {
                         if ($psModuleHashes.ContainsKey($_.Name)) {
                             $installFile = [IO.Path]::Combine($psModuleInstallLocation, $_.Name)
@@ -154,10 +157,12 @@
                 Write-Output ("Successfully downloaded and installed the {0} PowerShell module.`r`n" -f $appName)
             }
         }
+
     - name: Install PowerShell module
       win_shell: |
         InstallPowerShellModule
-      when: os_check.rc == 0 and ssm_check.rc == 0
+      when: os_check.rc == 0 and module_install_result.rc == 0
+
     - name: Remove downloaded file
       win_command: rm "{{ downloadPath }}"
       when: downloadPath is defined
