@@ -63,9 +63,7 @@
             if (Test-Path $psModuleInstallLocation) {
                 if (((Get-ChildItem $psModuleInstallLocation -Directory | Measure-Object).Count -eq 0) -and
                     ((Get-ChildItem $psModuleInstallLocation -File | Measure-Object).Count -eq $psModuleHashes.Count)) {
-                   
-
- $validFileHashes = $true
+                    $validFileHashes = $true
                     Get-ChildItem $psModuleInstallLocation -File | ForEach-Object {
                         if ($psModuleHashes.ContainsKey($_.Name)) {
                             $installFile = [IO.Path]::Combine($psModuleInstallLocation, $_.Name)
