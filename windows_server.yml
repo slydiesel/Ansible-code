@@ -1,6 +1,6 @@
 ---
 - name: Patch Windows servers using AWS SSM
-  hosts: windows_servers
+  hosts: Windows-servers
   gather_facts: false
   tasks:
     - name: Check OS version and SSM agent version
