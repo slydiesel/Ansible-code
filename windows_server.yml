@@ -155,12 +155,12 @@
                 Write-Output ("Successfully downloaded and installed the {0} PowerShell module.`r`n" -f $appName)
             }
         }
-
     - name: Install PowerShell module
       win_shell: |
         InstallPowerShellModule
-      when: os_check.rc == 0 and module_install_result.rc == 0
+      register: module_install_result
+      when: os_check.rc == 0
 
     - name: Remove downloaded file
       win_command: rm "{{ downloadPath }}"
-      when: downloadPath is defined
+      when: downloadPath is defined and module_install_result.rc == 0
