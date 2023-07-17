@@ -20,7 +20,7 @@
             exit 1
         }
         "@
-        $scriptBlock | Out-File -FilePath '/tmp/check_os_version.ps1'
+        $scriptBlock | Out-File -FilePath 'C:\temp\check_os_version.ps1'
       register: os_check
       changed_when: false
 
