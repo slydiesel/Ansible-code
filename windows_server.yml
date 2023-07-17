@@ -4,22 +4,23 @@
   gather_facts: false
   tasks:
     - name: Check OS version and SSM agent version
-      blockinfile:
-        path: /tmp/check_os_version.ps1
-        block: |
-          if ($PSVersionTable.PSEdition -eq 'Desktop') {
-              Write-Error 'This command is not supported on Windows Desktop editions.'
-              exit 1
-          }
-          if (([Environment]::OSVersion.Version.Major -le 5) -or ([Environment]::OSVersion.Version.Major -ge 10 -and (Get-CimInstance -ClassName Win32_OperatingSystem).OperatingSystemSKU -in 143, 144)) {
-              Write-Error 'This command is not supported on this Windows version.'
-              exit 1
-          }
-          $ssmAgentService = Get-ItemProperty 'HKLM:SYSTEM\\CurrentControlSet\\Services\\AmazonSSMAgent\\'
-          if (-not $ssmAgentService -or $ssmAgentService.Version -lt '2.0.533.0') {
-              Write-Host 'This command is not supported with SSM Agent version less than 2.0.533.0.'
-              exit 1
-          }
+      win_shell: |
+        $scriptBlock = @'
+        if ($PSVersionTable.PSEdition -eq 'Desktop') {
+            Write-Error 'This command is not supported on Windows Desktop editions.'
+            exit 1
+        }
+        if (([Environment]::OSVersion.Version.Major -le 5) -or ([Environment]::OSVersion.Version.Major -ge 10 -and (Get-CimInstance -ClassName Win32_OperatingSystem).OperatingSystemSKU -in 143, 144)) {
+            Write-Error 'This command is not supported on this Windows version.'
+            exit 1
+        }
+        $ssmAgentService = Get-ItemProperty 'HKLM:SYSTEM\\CurrentControlSet\\Services\\AmazonSSMAgent\\'
+        if (-not $ssmAgentService -or $ssmAgentService.Version -lt '2.0.533.0') {
+            Write-Host 'This command is not supported with SSM Agent version less than 2.0.533.0.'
+            exit 1
+        }
+        '@
+        $scriptBlock | Out-File -FilePath '/tmp/check_os_version.ps1'
       register: os_check
       changed_when: false
 
