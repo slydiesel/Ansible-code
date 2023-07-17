@@ -1,5 +1,5 @@
 - name: Windows Update
-  hosts: all
+  hosts: Windows-server
   gather_facts: false
   tasks:
     - name: Running Windows Update
