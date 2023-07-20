@@ -1,3 +1,4 @@
+---
 - name: Patch Windows servers using AWS SSM
   hosts: Windows-server  # Replace with the target hosts where you want to run the SSM document
   gather_facts: false
@@ -45,9 +46,7 @@
         function CheckFileHash ($filePath, $fileHash) {
             if (Test-Path $filePath) {
                 $fileStream = New-Object System.IO.FileStream($filePath, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read)
-                $sha256 = [System.Security.Cryptography.HashAlgorithm]
-
-::Create('System.Security.Cryptography.SHA256CryptoServiceProvider')
+                $sha256 = [System.Security.Cryptography.HashAlgorithm]::Create('System.Security.Cryptography.SHA256CryptoServiceProvider')
                 $sourceHash = [System.BitConverter]::ToString($sha256.ComputeHash($fileStream), 0).Replace('-', '').ToLowerInvariant()
                 $sha256.Dispose()
                 $fileStream.Dispose()
