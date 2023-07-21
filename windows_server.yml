@@ -1,17 +1,15 @@
-- name: Update Windows EC2 instance
+---
+- name: Patch Windows EC2 Instances
   hosts: Windows-server
-  gather_facts: yes
+  gather_facts: False
   tasks:
-    - name: Install Windows updates
-      win_updates:
-        category_names: 'SecurityUpdates,Updates'
-        state: installed
-      register: update_result
+    - name: Install AWS SSM agent (optional if not already installed)
+      win_shell: "Start-Process 'https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/windows_amd64/AmazonSSMAgent.msi' -ArgumentList '/qn' -Wait"
 
-    - name: Reboot if updates were installed
-      win_reboot:
-      when: update_result.reboot_required | default(false)
-
-    - name: Wait for the instance to come back online
-      wait_for_connection:
-        timeout: 300
+    - name: Patch Windows EC2 instances
+      ssm:
+        document_name: "AWS-InstallWindowsUpdates"
+        instance_ids: "{{ ansible_host }}"
+        region: "us-east-1"  # Replace with your desired AWS region
+      become: yes
+      become_method: runas
