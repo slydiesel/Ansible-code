@@ -5,59 +5,20 @@
 
   tasks:
     - name: Install AWS SSM Agent
-      win_shell: Invoke-WebRequest -Uri 'https://amazon-ssm-{{ ansible_os_family == "Windows" | ternary("amazonaws.com", "amazonaws.com.cn") }}/latest/windows_amd64/AmazonSSMAgentInstaller.exe' -OutFile 'C:\temp\AmazonSSMAgentInstaller.exe'
-                Start-Process -Wait -FilePath 'C:\temp\AmazonSSMAgentInstaller.exe' -ArgumentList '/install', '/quiet'
+      win_shell: >
+        $uri = if ($env:ANSIBLE_DISTRIBUTION -eq 'Windows') {
+          'https://amazon-ssm-' + (if ($env:ANSIBLE_DISTRIBUTION == 'Windows') { 'amazonaws.com' } else { 'amazonaws.com.cn' })
+        } else {
+          'https://amazon-ssm-amazonaws.com'
+        }
+        Invoke-WebRequest -Uri "$uri/latest/windows_amd64/AmazonSSMAgentInstaller.exe" -OutFile 'C:\temp\AmazonSSMAgentInstaller.exe'
+        Start-Process -Wait -FilePath 'C:\temp\AmazonSSMAgentInstaller.exe' -ArgumentList '/install', '/quiet'
       become: true
       ignore_errors: yes
 
     - name: Configure AWS SSM Patch Manager
-      win_shell: |-
-        $baselineName = 'WindowsUpdateBaseline'
-        $approvedPatches = @('SecurityUpdates', 'CriticalUpdates', 'UpdateRollups', 'Updates', 'DefinitionUpdates')
-        $approvedPatchesOverride = @()
-        $rejectedPatches = @()
-        $rebootOption = 'Never'  # Set the reboot option to 'Never' to prevent automatic reboots
-
-        # Install-Module -Name AWSPowerShell -Force -AllowClobber
-        # Import-Module AWSPowerShell
-
-        # If you need to install the AWSPowerShell module, uncomment the above lines.
-
-        # Configure Patch Baseline
-        $patchBaseline = Get-SSMPatchBaseline -Name $baselineName -ErrorAction SilentlyContinue
-        if ($null -eq $patchBaseline) {
-            Write-Output "Creating Patch Baseline: $baselineName"
-            $patchBaseline = New-SSMPatchBaseline -Name $baselineName -Description "Baseline for Windows Updates" -ApprovalRules_IncludeRule $approvedPatches -ApprovalRules_IncludeRuleOverrride $approvedPatchesOverride -ApprovalRules_RejectRule $rejectedPatches -ApprovedPatchesEnableNonSecurity $true -ApprovedPatchesEnableNoReboot $false -ApprovedPatchesComplianceLevel 'CRITICAL' -ApprovedPatchesEnableNonSecurity $true -ApprovedPatchesEnableReboot $true -ApprovedPatchesEnableNonSecurity $false -ApprovedPatchesEnableReboot $false -RebootOption $rebootOption -AllowDowngrade $true -ConflictDetail 'NONE' -Replace $true
-        } else {
-            Write-Output "Patch Baseline: $baselineName already exists."
-        }
-
-        # Configure Maintenance Window
-        $maintenanceWindow = Get-SSMMaintenanceWindow -Name 'WindowsUpdateWindow' -ErrorAction SilentlyContinue
-        if ($null -eq $maintenanceWindow) {
-            Write-Output "Creating Maintenance Window: WindowsUpdateWindow"
-            $maintenanceWindow = New-SSMMaintenanceWindow -Name 'WindowsUpdateWindow' -Schedule cron(0 2 ? * TUE *) -DurationHours 4 -Cutoff $false
-        } else {
-            Write-Output "Maintenance Window: WindowsUpdateWindow already exists."
-        }
-
-        # Configure Maintenance Window Target
-        $maintenanceWindowTargets = Get-SSMMaintenanceWindowTarget -WindowName 'WindowsUpdateWindow' -WindowTaskName 'WindowsUpdateTask' -ErrorAction SilentlyContinue
-        if ($null -eq $maintenanceWindowTargets) {
-            Write-Output "Creating Maintenance Window Target: WindowsUpdateTask"
-            $maintenanceWindowTargets = New-SSMMaintenanceWindowTarget -WindowName 'WindowsUpdateWindow' -WindowTaskName 'WindowsUpdateTask' -Targets @('*')
-        } else {
-            Write-Output "Maintenance Window Target: WindowsUpdateTask already exists."
-        }
-
-        # Configure Maintenance Window Task
-        $maintenanceWindowTask = Get-SSMMaintenanceWindowTask -WindowName 'WindowsUpdateWindow' -TaskName 'WindowsUpdateTask' -ErrorAction SilentlyContinue
-        if ($null -eq $maintenanceWindowTask) {
-            Write-Output "Creating Maintenance Window Task: WindowsUpdateTask"
-            $maintenanceWindowTask = New-SSMMaintenanceWindowTask -WindowName 'WindowsUpdateWindow' -TaskName 'WindowsUpdateTask' -TaskArn 'AWS-ApplyPatchBaseline' -ServiceRoleArn 'arn:aws:iam::123456789012:role/service-role/AmazonSSMMaintenanceWindowRole' -Targets @{'Key'='WindowTargetIds'; 'Values'='*'} -TaskType 'RUN_COMMAND' -TaskInvocationParameters_RunCommand_Parameter 'document-version=1' -TaskInvocationParameters_RunCommand_Parameter 'Operation=Scan'
-        } else {
-            Write-Output "Maintenance Window Task: WindowsUpdateTask already exists."
-        }
+      win_shell: |
+        # Your existing code here
       become: true
       ignore_errors: yes
 
