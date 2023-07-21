@@ -1,31 +1,27 @@
 ---
-- name: Update Windows EC2 and AWS SSM
+- name: Update Windows EC2 instances
   hosts: Windows-server
-  become: yes
-  gather_facts: yes
-
+  gather_facts: false
   tasks:
-    - name: Update Windows
-      win_updates:
-        category_names:
-          - SecurityUpdates
-          - CriticalUpdates
-          - UpdateRollups
-          - FeaturePacks
-        state: installed
-      register: win_update_result
-
-- name: Update AWS SSM
-  hosts: localhost
-  gather_facts: no
-
-  tasks:
-    - name: Update SSM
-      aws_ssm:
-        name: all
-        state: "latest"
-      register: ssm_update_result
-
-    - name: Print SSM update result
-      debug:
-        var: ssm_update_result
+    - name: Run Systems Manager Command
+      win_shell: |
+        $updateResult = (New-Object -ComObject "Microsoft.Update.Session").CreateUpdateSearcher().Search("IsInstalled=0").Updates
+        if ($updateResult.Count -gt 0) {
+          $updateSession = New-Object -ComObject "Microsoft.Update.Session"
+          $updateDownloader = $updateSession.CreateUpdateDownloader()
+          $updateDownloader.Updates = $updateResult
+          $updateDownloader.Download()
+          $updateInstaller = $updateSession.CreateUpdateInstaller()
+          $updateInstaller.Updates = $updateResult
+          $installResult = $updateInstaller.Install()
+          if ($installResult.HResult -eq 0) {
+            Write-Output "Updates installed successfully."
+          } else {
+            Write-Output "Failed to install updates."
+            exit 1
+          }
+        } else {
+          Write-Output "No updates available."
+        }
+      register: result
+      failed_when: "'Access denied' not in result.stdout and 'Error' in result.stdout"
