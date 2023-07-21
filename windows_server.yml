@@ -1,15 +1,16 @@
 ---
-- name: Patch Windows EC2 Instances
-  hosts: Windows-server
+- name: Run AWS Default Patch Baseline for Windows
+  hosts: Windows-server  # Specify the group from inventory
   gather_facts: False
   tasks:
     - name: Install AWS SSM agent (optional if not already installed)
       win_shell: "Start-Process 'https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/windows_amd64/AmazonSSMAgent.msi' -ArgumentList '/qn' -Wait"
 
-    - name: Patch Windows EC2 instances
-      ssm:
-        document_name: "AWS-InstallWindowsUpdates"
-        instance_ids: "{{ ansible_host }}"
+    - name: Run AWS Default Patch Baseline
+      aws_ssm:
+        name: "AWS-DefaultPatchBaseline"
         region: "us-east-1"  # Replace with your desired AWS region
+        targets: "{{ ansible_host }}"  # Use the dynamic variable for target instances
       become: yes
       become_method: runas
+
