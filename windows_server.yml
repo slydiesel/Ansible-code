@@ -3,6 +3,14 @@
   hosts: Windows-server
   gather_facts: yes
   tasks:
+    - name: Install boto3 library for Python
+      win_shell: pip install boto3
+      become: yes
+      become_user: Administrator
+      # Adjust the path to Python executable if needed, this is the default path on most Windows installations
+      args:
+        executable: C:\Python39\Scripts\pip.exe
+
     - name: Perform Windows update
       win_updates:
         category_names:
