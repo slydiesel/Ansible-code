@@ -1,12 +1,27 @@
 ---
-- name: Run AWS Default Patch Baseline for Windows
+- name: Update and Patch Windows EC2 Instances
   hosts: Windows-server
   gather_facts: False
   tasks:
-    - name: Install AWS SSM agent on localhost (optional if not already installed)
+    - name: Install AWS SSM agent (optional if not already installed)
       win_shell: "Start-Process 'https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/windows_amd64/AmazonSSMAgent.msi' -ArgumentList '/qn' -Wait"
-      when: ansible_os_family == "Windows"
 
-    - name: Execute AWS SSM document for Default Patch Baseline
-      command: "aws ssm create-association --name AWS-DefaultPatchBaseline --targets Key=InstanceIds,Values=instance-id-1,instance-id-2,instance-id-3"
-      become: no
+    - name: Update Windows packages
+      win_updates:
+        category_names:
+          - CriticalUpdates
+          - SecurityUpdates
+          - UpdateRollups
+        state: installed
+      become: yes
+      become_method: runas
+
+    - name: Send update notification to AWS Patch Manager
+      aws_ssm:
+        name: "AWS-RunPatchBaseline"
+        instance_id: "{{ ansible_host }}"
+        parameters:
+          Operation: Install  # Use "Install" to install updates and trigger reboot (if required)
+        region: "us-east-1"  # Replace with your desired AWS region
+      become: yes
+      become_method: runas
