@@ -1,16 +1,12 @@
 ---
 - name: Run AWS Default Patch Baseline for Windows
-  hosts: Windows-server  # Specify the group from inventory
+  hosts: Windows-server
   gather_facts: False
   tasks:
-    - name: Install AWS SSM agent (optional if not already installed)
+    - name: Install AWS SSM agent on localhost (optional if not already installed)
       win_shell: "Start-Process 'https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/windows_amd64/AmazonSSMAgent.msi' -ArgumentList '/qn' -Wait"
+      when: ansible_os_family == "Windows"
 
-    - name: Run AWS Default Patch Baseline
-      aws_ssm:
-        name: "AWS-DefaultPatchBaseline"
-        region: "us-east-1"  # Replace with your desired AWS region
-        targets: "{{ ansible_host }}"  # Use the dynamic variable for target instances
-      become: yes
-      become_method: runas
-
+    - name: Execute AWS SSM document for Default Patch Baseline
+      command: "aws ssm create-association --name AWS-DefaultPatchBaseline --targets Key=InstanceIds,Values=instance-id-1,instance-id-2,instance-id-3"
+      become: no
