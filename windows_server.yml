@@ -1,27 +1,27 @@
 ---
-- name: Update Windows EC2 instances
+- name: Patch Windows EC2 and Update Patch Manager Dashboard
   hosts: Windows-server
-  gather_facts: false
+  gather_facts: yes
   tasks:
-    - name: Run Systems Manager Command
-      win_shell: |
-        $updateResult = (New-Object -ComObject "Microsoft.Update.Session").CreateUpdateSearcher().Search("IsInstalled=0").Updates
-        if ($updateResult.Count -gt 0) {
-          $updateSession = New-Object -ComObject "Microsoft.Update.Session"
-          $updateDownloader = $updateSession.CreateUpdateDownloader()
-          $updateDownloader.Updates = $updateResult
-          $updateDownloader.Download()
-          $updateInstaller = $updateSession.CreateUpdateInstaller()
-          $updateInstaller.Updates = $updateResult
-          $installResult = $updateInstaller.Install()
-          if ($installResult.HResult -eq 0) {
-            Write-Output "Updates installed successfully."
-          } else {
-            Write-Output "Failed to install updates."
-            exit 1
-          }
-        } else {
-          Write-Output "No updates available."
-        }
-      register: result
-      failed_when: "'Access denied' not in result.stdout and 'Error' in result.stdout"
+    - name: Perform Windows update
+      win_updates:
+        category_names:
+          - CriticalUpdates
+          - SecurityUpdates
+          - UpdateRollups
+        state: installed
+      register: update_result
+
+    - name: Wait for Windows updates to complete
+      async: 300
+      poll: 0
+      when: update_result | changed
+
+    - name: Update Patch Manager Dashboard
+      run_once: yes
+      local_action:
+        module: aws_ssm.create_association
+        name: AWS-UpdateSSMAgent
+        parameters:
+          AutomationAssumeRole: "arn:aws:iam::{{ ansible_aws_account_id }}:role/YourPatchManagerAutomationRole"
+          InstanceId: "{{ ansible_host }}"
