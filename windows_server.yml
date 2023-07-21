@@ -17,7 +17,7 @@
       become_method: runas
 
     - name: Send update notification to AWS Patch Manager
-      community.aws.ssm:
+      amazon.aws.aws_ssm:
         name: "AWS-RunPatchBaseline"
         instance_id: "{{ ansible_host }}"
         parameters:
