@@ -1,27 +1,74 @@
 ---
-- name: Update and Patch Windows EC2 Instances
+- name: Prepare Windows Servers for Patch Management
   hosts: Windows-server
-  gather_facts: False
+  gather_facts: false
+
   tasks:
-    - name: Install AWS SSM agent (optional if not already installed)
-      win_shell: "Start-Process 'https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/windows_amd64/AmazonSSMAgent.msi' -ArgumentList '/qn' -Wait"
+    - name: Install AWS SSM Agent
+      win_shell: Invoke-WebRequest -Uri 'https://amazon-ssm-{{ ansible_os_family == "Windows" | ternary("amazonaws.com", "amazonaws.com.cn") }}/latest/windows_amd64/AmazonSSMAgentInstaller.exe' -OutFile 'C:\temp\AmazonSSMAgentInstaller.exe'
+                Start-Process -Wait -FilePath 'C:\temp\AmazonSSMAgentInstaller.exe' -ArgumentList '/install', '/quiet'
+      become: true
+      ignore_errors: yes
 
-    - name: Update Windows packages
+    - name: Configure AWS SSM Patch Manager
+      win_shell: |-
+        $baselineName = 'WindowsUpdateBaseline'
+        $approvedPatches = @('SecurityUpdates', 'CriticalUpdates', 'UpdateRollups', 'Updates', 'DefinitionUpdates')
+        $approvedPatchesOverride = @()
+        $rejectedPatches = @()
+        $rebootOption = 'Never'  # Set the reboot option to 'Never' to prevent automatic reboots
+
+        # Install-Module -Name AWSPowerShell -Force -AllowClobber
+        # Import-Module AWSPowerShell
+
+        # If you need to install the AWSPowerShell module, uncomment the above lines.
+
+        # Configure Patch Baseline
+        $patchBaseline = Get-SSMPatchBaseline -Name $baselineName -ErrorAction SilentlyContinue
+        if ($null -eq $patchBaseline) {
+            Write-Output "Creating Patch Baseline: $baselineName"
+            $patchBaseline = New-SSMPatchBaseline -Name $baselineName -Description "Baseline for Windows Updates" -ApprovalRules_IncludeRule $approvedPatches -ApprovalRules_IncludeRuleOverrride $approvedPatchesOverride -ApprovalRules_RejectRule $rejectedPatches -ApprovedPatchesEnableNonSecurity $true -ApprovedPatchesEnableNoReboot $false -ApprovedPatchesComplianceLevel 'CRITICAL' -ApprovedPatchesEnableNonSecurity $true -ApprovedPatchesEnableReboot $true -ApprovedPatchesEnableNonSecurity $false -ApprovedPatchesEnableReboot $false -RebootOption $rebootOption -AllowDowngrade $true -ConflictDetail 'NONE' -Replace $true
+        } else {
+            Write-Output "Patch Baseline: $baselineName already exists."
+        }
+
+        # Configure Maintenance Window
+        $maintenanceWindow = Get-SSMMaintenanceWindow -Name 'WindowsUpdateWindow' -ErrorAction SilentlyContinue
+        if ($null -eq $maintenanceWindow) {
+            Write-Output "Creating Maintenance Window: WindowsUpdateWindow"
+            $maintenanceWindow = New-SSMMaintenanceWindow -Name 'WindowsUpdateWindow' -Schedule cron(0 2 ? * TUE *) -DurationHours 4 -Cutoff $false
+        } else {
+            Write-Output "Maintenance Window: WindowsUpdateWindow already exists."
+        }
+
+        # Configure Maintenance Window Target
+        $maintenanceWindowTargets = Get-SSMMaintenanceWindowTarget -WindowName 'WindowsUpdateWindow' -WindowTaskName 'WindowsUpdateTask' -ErrorAction SilentlyContinue
+        if ($null -eq $maintenanceWindowTargets) {
+            Write-Output "Creating Maintenance Window Target: WindowsUpdateTask"
+            $maintenanceWindowTargets = New-SSMMaintenanceWindowTarget -WindowName 'WindowsUpdateWindow' -WindowTaskName 'WindowsUpdateTask' -Targets @('*')
+        } else {
+            Write-Output "Maintenance Window Target: WindowsUpdateTask already exists."
+        }
+
+        # Configure Maintenance Window Task
+        $maintenanceWindowTask = Get-SSMMaintenanceWindowTask -WindowName 'WindowsUpdateWindow' -TaskName 'WindowsUpdateTask' -ErrorAction SilentlyContinue
+        if ($null -eq $maintenanceWindowTask) {
+            Write-Output "Creating Maintenance Window Task: WindowsUpdateTask"
+            $maintenanceWindowTask = New-SSMMaintenanceWindowTask -WindowName 'WindowsUpdateWindow' -TaskName 'WindowsUpdateTask' -TaskArn 'AWS-ApplyPatchBaseline' -ServiceRoleArn 'arn:aws:iam::123456789012:role/service-role/AmazonSSMMaintenanceWindowRole' -Targets @{'Key'='WindowTargetIds'; 'Values'='*'} -TaskType 'RUN_COMMAND' -TaskInvocationParameters_RunCommand_Parameter 'document-version=1' -TaskInvocationParameters_RunCommand_Parameter 'Operation=Scan'
+        } else {
+            Write-Output "Maintenance Window Task: WindowsUpdateTask already exists."
+        }
+      become: true
+      ignore_errors: yes
+
+    - name: Running Windows Update
       win_updates:
-        category_names:
-          - CriticalUpdates
-          - SecurityUpdates
-          - UpdateRollups
-        state: installed
-      become: yes
-      become_method: runas
+        category_names: ['SecurityUpdates', 'CriticalUpdates', 'UpdateRollups', 'Updates', 'DefinitionUpdates']
+        reboot: no  # Disable automatic reboots after updates
+      register: result
 
-    - name: Send update notification to AWS Patch Manager
-      amazon.aws.aws_ssm:
-        name: "AWS-RunPatchBaseline"
-        instance_id: "{{ ansible_host }}"
-        parameters:
-          Operation: Install  # Use "Install" to install updates and trigger reboot (if required)
-        region: "us-east-1"  # Replace with your desired AWS region
-      become: yes
-      become_method: runas
+    # Output results
+    - debug: var=result
+```
+
+In this updated playbook, we set the `reboot` option in the `win_updates` module to `no`, which prevents automatic reboots after Windows updates are applied. Now the playbook will run Windows updates and stay compliant with AWS Systems Manager without automatically rebooting the servers.
