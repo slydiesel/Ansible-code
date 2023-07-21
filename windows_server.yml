@@ -1,4 +1,3 @@
-
 ---
 - name: Update and Patch Windows EC2 Instances
   hosts: Windows-server
@@ -18,7 +17,7 @@
       become_method: runas
 
     - name: Send update notification to AWS Patch Manager
-      aws_ssm:
+      community.aws.ssm:
         name: "AWS-RunPatchBaseline"
         instance_id: "{{ ansible_host }}"
         parameters:
