@@ -1,33 +1,10 @@
----
-- name: Prepare Windows Servers for Patch Management
+- name: Windows Update
   hosts: Windows-server
   gather_facts: false
-
   tasks:
-    - name: Install AWS SSM Agent
-      win_shell: |
-        $uri = if ($env:ANSIBLE_DISTRIBUTION -eq 'Windows') {
-          'https://amazon-ssm-' + (if ($env:ANSIBLE_DISTRIBUTION == 'Windows') { 'amazonaws.com' } else { 'amazonaws.com.cn' })
-        } else {
-          'https://amazon-ssm-amazonaws.com'
-        }
-        Invoke-WebRequest -Uri "$uri/latest/windows_amd64/AmazonSSMAgentInstaller.exe" -OutFile 'C:\temp\AmazonSSMAgentInstaller.exe'
-        Start-Process -Wait -FilePath 'C:\temp\AmazonSSMAgentInstaller.exe' -ArgumentList '/install', '/quiet'
-      become: true
-      become_method: runas
-      become_user: Administrator
-
-    - name: Configure AWS SSM Patch Manager
-      win_shell: |
-        # Your existing code here
-      become: true
-      become_method: runas
-      become_user: Administrator
-
     - name: Running Windows Update
       win_updates:
         category_names: ['SecurityUpdates', 'CriticalUpdates', 'UpdateRollups', 'Updates', 'DefinitionUpdates']
-        reboot: no  # Disable automatic reboots after updates
       register: result
 
     # Output results
