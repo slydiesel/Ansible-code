@@ -69,6 +69,3 @@
 
     # Output results
     - debug: var=result
-```
-
-In this updated playbook, we set the `reboot` option in the `win_updates` module to `no`, which prevents automatic reboots after Windows updates are applied. Now the playbook will run Windows updates and stay compliant with AWS Systems Manager without automatically rebooting the servers.
