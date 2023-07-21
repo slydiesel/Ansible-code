@@ -5,7 +5,7 @@
 
   tasks:
     - name: Install AWS SSM Agent
-      win_shell: >
+      win_shell: |
         $uri = if ($env:ANSIBLE_DISTRIBUTION -eq 'Windows') {
           'https://amazon-ssm-' + (if ($env:ANSIBLE_DISTRIBUTION == 'Windows') { 'amazonaws.com' } else { 'amazonaws.com.cn' })
         } else {
@@ -14,13 +14,15 @@
         Invoke-WebRequest -Uri "$uri/latest/windows_amd64/AmazonSSMAgentInstaller.exe" -OutFile 'C:\temp\AmazonSSMAgentInstaller.exe'
         Start-Process -Wait -FilePath 'C:\temp\AmazonSSMAgentInstaller.exe' -ArgumentList '/install', '/quiet'
       become: true
-      ignore_errors: yes
+      become_method: runas
+      become_user: Administrator
 
     - name: Configure AWS SSM Patch Manager
       win_shell: |
         # Your existing code here
       become: true
-      ignore_errors: yes
+      become_method: runas
+      become_user: Administrator
 
     - name: Running Windows Update
       win_updates:
